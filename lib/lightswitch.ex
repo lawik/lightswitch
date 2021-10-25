@@ -45,6 +45,8 @@ defmodule Lightswitch do
     12 => :k005
   }
 
+  @fade_time 100 # ms
+
   def start_link(opts) do
     GenServer.start_link(Lightswitch, opts, opts)
   end
@@ -62,8 +64,15 @@ defmodule Lightswitch do
       pins: pins,
       devices: devices
     }
-    set_lights(state, %{}, "ffffff")
+    fade_lights(state, %{}, "ffffff")
+    Process.send_after(self(), :discovery, :timer.seconds(10))
+    :timer.send_interval(:timer.seconds(30), self(), :discovery)
     {:ok, state}
+  end
+
+  def handle_info(:discovery, state) do
+    state = %{state | devices: Keylight.discover()}
+    {:noreply, state}
   end
 
   def handle_info({:circuits_gpio, pin_number, timestamp, value}, state) do
@@ -72,7 +81,13 @@ defmodule Lightswitch do
     #set_lights(state, %{key => "ff00ff"})
     if value == 0 and function_exported?(Actions, key, 1) do
       apply(Actions, key, [state])
+      fade_lights(state, %{key => "ff00ff"})
     end
+    {:noreply, state}
+  end
+
+  def handle_info({:fade, light_colors, fill, fades}, state) do
+    fade_lights(state, light_colors, fill, fades)
     {:noreply, state}
   end
 
@@ -83,5 +98,17 @@ defmodule Lightswitch do
       acc <> <<227, rgb.b, rgb.g, rgb.r>>
     end) <> @eof
     SPI.transfer(state.spidev, data)
+  end
+
+  defp fade_lights(state, light_colors, fill \\ @color_off, fades \\ 0) do
+    if fades < 255 do
+      data = Enum.reduce(@spi_led_order, @sof, fn led, acc ->
+        color = Map.get(light_colors, led, fill)
+        rgb = Chameleon.convert(color, Chameleon.Color.RGB)
+        acc <> <<227, max(0, rgb.b - fades), max(0, rgb.g - fades), max(0, rgb.r - fades) >>
+      end) <> @eof
+      SPI.transfer(state.spidev, data)
+      Process.send_after(self(), {:fade, light_colors, fill, fades + 1}, @fade_time)
+    end
   end
 end
