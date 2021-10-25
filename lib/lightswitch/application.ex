@@ -13,9 +13,7 @@ defmodule Lightswitch.Application do
 
     children =
       [
-        # Children for all targets
-        # Starts a worker by calling: Lightswitch.Worker.start_link(arg)
-        # {Lightswitch.Worker, arg},
+        Lightswitch
       ] ++ children(target())
 
     Supervisor.start_link(children, opts)
