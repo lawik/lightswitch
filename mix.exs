@@ -44,7 +44,7 @@ defmodule Lightswitch.MixProject do
 
       # Dependencies for all targets except :host
       {:nerves_runtime, "~> 0.11.3", targets: @all_targets},
-      {:nerves_pack, "== 0.4.2", targets: @all_targets},
+      {:nerves_pack, "~> 0.4", targets: @all_targets},
 
       # Dependencies for specific targets
       # NOTE: It's generally low risk and recommended to follow minor version
@@ -52,7 +52,7 @@ defmodule Lightswitch.MixProject do
       # version updates, please review their release notes in case
       # changes to your application are needed.
 #      {:nerves_system_rpi, "~> 1.17", runtime: false, targets: :rpi},
-      {:nerves_system_rpi0, "== 1.17.0", runtime: false, targets: :rpi0},
+      {:nerves_system_rpi0, "~> 1.17", runtime: false, targets: :rpi0},
 #      {:nerves_system_rpi2, "~> 1.17", runtime: false, targets: :rpi2},
 #      {:nerves_system_rpi3, "~> 1.17", runtime: false, targets: :rpi3},
 #      {:nerves_system_rpi3a, "~> 1.17", runtime: false, targets: :rpi3a},
