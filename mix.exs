@@ -39,8 +39,8 @@ defmodule Lightswitch.MixProject do
       {:circuits_gpio, "~> 1.0"},
       {:circuits_spi, "~> 1.0"},
       {:chameleon, "~> 2.3"},
-#      {:mdns_lite, "~> 0.8.3"},
-      {:mdns_lite, path: "../mdns_lite", override: true},
+      {:mdns_lite, "~> 0.8.3", override: true},
+#      {:mdns_lite, path: "../mdns_lite", override: true},
 
       # Dependencies for all targets except :host
       {:nerves_runtime, "~> 0.11.3", targets: @all_targets},
