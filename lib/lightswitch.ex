@@ -45,8 +45,6 @@ defmodule Lightswitch do
     12 => :k005
   }
 
-  @fade_time 100 # ms
-
   def start_link(opts) do
     GenServer.start_link(Lightswitch, opts, opts)
   end
@@ -55,6 +53,7 @@ defmodule Lightswitch do
 
   def init(opts) do
     devices = Keylight.discover()
+    status = Keylight.status(devices)
     {:ok, spidev} = SPI.open(@spi_device, speed_hz: @spi_speed_hz)
     pins = Enum.map(@gpio_pins, fn {pin_number, _} ->
       {:ok, pin_ref} = GPIO.open(pin_number, :input, pull_mode: :pullup)
@@ -62,24 +61,35 @@ defmodule Lightswitch do
       {pin_number, pin_ref}
     end)
 
-    colors = for key <- @spi_led_order, into: %{} do
-      {key, @no_color}
-    end
-
     state = %{
       spidev: spidev,
       pins: pins,
       devices: devices,
-      colors: colors
+      colors: %{},
+      status: status
     }
+    colors = apply(Actions, :state_to_colors, [state])
+    state = %{state | colors: colors}
+    set_lights(state, colors)
+
     Process.send_after(self(), :discovery, :timer.seconds(10))
     :timer.send_interval(:timer.seconds(30), self(), :discovery)
-    #:timer.send_interval(100, self(), :shift)
     {:ok, state}
   end
 
   def handle_info(:discovery, state) do
-    state = %{state | devices: Keylight.discover()}
+    devices = Keylight.discover()
+    status = Keylight.status(devices)
+    state = %{state | devices: devices, status: status}
+    {:noreply, state}
+  end
+
+  def handle_info(:check_status, state) do
+    status = Keylight.status(state.devices)
+    state = %{state | status: status}
+    colors = apply(Actions, :state_to_colors, [state])
+    state = %{state | colors: colors}
+    set_lights(state, colors)
     {:noreply, state}
   end
 
@@ -87,24 +97,11 @@ defmodule Lightswitch do
     key = @gpio_pins[pin_number]
     Logger.info("Key: #{inspect(pin_number)} #{inspect(key)} #{value}")
     #set_lights(state, %{key => "ff00ff"})
-    new_colors = if value == 0 and function_exported?(Actions, key, 1) do
+    state = if value == 0 and function_exported?(Actions, key, 1) do
       apply(Actions, key, [state])
-      #fade_lights(state, %{key => %Chameleon.RGB{r: 0, g: 255, b: 255}})
     else
-      state.colors
+      state
     end
-    {:noreply, %{state | colors: new_colors}}
-  end
-
-  def handle_info({:fade, colors, fades}, state) do
-    new_colors = fade_lights(state, colors, fades)
-    {:noreply, %{state | colors: new_colors}}
-  end
-
-  def handle_info(:shift, state) do
-    shift = (System.monotonic_time(:second)) |> :math.sin()
-    hue = shift * 360
-    set_lights(state, %{}, %Chameleon.HSL{h: hue, s: 100, l: 50})
     {:noreply, state}
   end
 
@@ -115,26 +112,5 @@ defmodule Lightswitch do
       acc <> <<227, rgb.b, rgb.g, rgb.r>>
     end) <> @eof
     SPI.transfer(state.spidev, data)
-  end
-
-  defp fade_lights(state, colors, fades \\ 0) do
-    if fades < 255 do
-
-      new_colors = state.colors
-             |> Map.merge(colors)
-
-      data = Enum.reduce(new_colors, @sof, fn {led, rgb}, acc ->
-        if colors[led] do
-          acc <> <<227, max(0, rgb.b - fades), max(0, rgb.g - fades), max(0, rgb.r - fades) >>
-        else
-          acc <> <<227, max(0, rgb.b), max(0, rgb.g), max(0, rgb.r) >>
-        end
-      end) <> @eof
-      SPI.transfer(state.spidev, data)
-      Process.send_after(self(), {:fade, colors, fades + 1}, @fade_time)
-      new_colors
-    else
-      state.colors
-    end
   end
 end
